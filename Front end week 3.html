@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ride-Hailing Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f8f9fa; color: #333; }
+    h1 { text-align: center; color: #1a73e8; }
+    .card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 0 5px #ccc; }
+    form { display: flex; flex-direction: column; gap: 10px; max-width: 400px; }
+    input, select, button { padding: 10px; border-radius: 4px; border: 1px solid #ccc; }
+    button { background-color: #1a73e8; color: white; cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { padding: 10px; border: 1px solid #eee; text-align: left; }
+    .accept-btn { padding: 5px 10px; background: green; color: white; border: none; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+  <h1>🚖 Ride-Hailing Dashboard</h1>
+
+  <div class="card">
+    <h2>🧍 Passenger: Request a Ride</h2>
+    <form id="rideForm">
+      <input type="text" id="passengerName" placeholder="Your Name" required>
+      <input type="text" id="pickup" placeholder="Pickup Location" required>
+      <input type="text" id="destination" placeholder="Destination" required>
+      <button type="submit">Request Ride</button>
+      <div id="rideStatus"></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>🚗 Drivers: Pending Rides</h2>
+    <input type="text" id="driverName" placeholder="Driver Name" />
+    <table id="pendingRides">
+      <thead>
+        <tr><th>Passenger</th><th>Pickup</th><th>Destination</th><th>Action</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>📋 All Rides</h2>
+    <table id="allRides">
+      <thead>
+        <tr><th>Passenger</th><th>Pickup</th><th>Destination</th><th>Status</th><th>Accepted By</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    async function loadRides() {
+      const res = await fetch('http://localhost:3000/rides');
+      const rides = await res.json();
+
+      const pendingTable = document.querySelector('#pendingRides tbody');
+      const allTable = document.querySelector('#allRides tbody');
+
+      pendingTable.innerHTML = '';
+      allTable.innerHTML = '';
+
+      rides.forEach(ride => {
+        allTable.innerHTML += `
+          <tr>
+            <td>${ride.passengerName || '-'}</td>
+            <td>${ride.pickup || '-'}</td>
+            <td>${ride.destination || '-'}</td>
+            <td>${ride.status || '-'}</td>
+            <td>${ride.acceptedBy || '-'}</td>
+          </tr>
+        `;
+
+        if (ride.status === 'pending') {
+          pendingTable.innerHTML += `
+            <tr>
+              <td>${ride.passengerName}</td>
+              <td>${ride.pickup}</td>
+              <td>${ride.destination}</td>
+              <td><button class="accept-btn" onclick="acceptRide('${ride._id}')">Accept</button></td>
+            </tr>
+          `;
+        }
+      });
+    }
+
+    document.getElementById('rideForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const passengerName = document.getElementById('passengerName').value;
+      const pickup = document.getElementById('pickup').value;
+      const destination = document.getElementById('destination').value;
+
+      const res = await fetch('http://localhost:3000/rides/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ passengerName, pickup, destination })
+      });
+
+      document.getElementById('rideForm').reset();
+      document.getElementById('rideStatus').textContent = 'Ride requested!';
+      loadRides();
+    });
+
+    async function acceptRide(rideId) {
+      const driverName = document.getElementById('driverName').value;
+      if (!driverName) return alert("Please enter driver name before accepting.");
+
+      await fetch(`http://localhost:3000/rides/${rideId}/accept`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ driverName })
+      });
+
+      loadRides();
+    }
+
+    // Initial load
+    loadRides();
+  </script>
+</body>
+</html>
