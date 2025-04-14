@@ -1,90 +1,112 @@
-/*
-object-assign
-(c) Sindre Sorhus
-@license MIT
-*/
+const express = require('express');
+const { MongoClient, ObjectId } = require('mongodb');
+const cors = require('cors');
+const path = require('path');
 
-'use strict';
-/* eslint-disable no-unused-vars */
-var getOwnPropertySymbols = Object.getOwnPropertySymbols;
-var hasOwnProperty = Object.prototype.hasOwnProperty;
-var propIsEnumerable = Object.prototype.propertyIsEnumerable;
+const app = express();
+const port = 3000;
 
-function toObject(val) {
-	if (val === null || val === undefined) {
-		throw new TypeError('Object.assign cannot be called with null or undefined');
-	}
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
-	return Object(val);
+const uri = "mongodb://localhost:27017";
+const client = new MongoClient(uri);
+let db;
+
+async function connectToMongoDB() {
+  try {
+    await client.connect();
+    db = client.db("mydatabase");
+    console.log("Connected to MongoDB!");
+  } catch (err) {
+    console.error("Error connecting to MongoDB:", err);
+  }
 }
+connectToMongoDB();
 
-function shouldUseNative() {
-	try {
-		if (!Object.assign) {
-			return false;
-		}
+app.get('/', (req, res) => {
+  res.send('Hello World!');
+});
 
-		// Detect buggy property enumeration order in older V8 versions.
+// ========== RIDE REQUESTS ==========
 
-		// https://bugs.chromium.org/p/v8/issues/detail?id=4118
-		var test1 = new String('abc');  // eslint-disable-line no-new-wrappers
-		test1[5] = 'de';
-		if (Object.getOwnPropertyNames(test1)[0] === '5') {
-			return false;
-		}
+// Passenger creates a ride request
+app.post('/rides/request', async (req, res) => {
+  try {
+    const { passengerName, pickup, destination } = req.body;
+    if (!passengerName || !pickup || !destination) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
 
-		// https://bugs.chromium.org/p/v8/issues/detail?id=3056
-		var test2 = {};
-		for (var i = 0; i < 10; i++) {
-			test2['_' + String.fromCharCode(i)] = i;
-		}
-		var order2 = Object.getOwnPropertyNames(test2).map(function (n) {
-			return test2[n];
-		});
-		if (order2.join('') !== '0123456789') {
-			return false;
-		}
+    const result = await db.collection('rides').insertOne({
+      passengerName,
+      pickup,
+      destination,
+      status: "pending",
+      acceptedBy: null
+    });
 
-		// https://bugs.chromium.org/p/v8/issues/detail?id=3056
-		var test3 = {};
-		'abcdefghijklmnopqrst'.split('').forEach(function (letter) {
-			test3[letter] = letter;
-		});
-		if (Object.keys(Object.assign({}, test3)).join('') !==
-				'abcdefghijklmnopqrst') {
-			return false;
-		}
+    res.status(201).json({ id: result.insertedId });
+  } catch (err) {
+    res.status(400).json({ error: "Failed to create ride request" });
+  }
+});
 
-		return true;
-	} catch (err) {
-		// We don't expect any of the above to throw, but better to be safe.
-		return false;
-	}
-}
+// Driver accepts a ride
+app.patch('/rides/:id/accept', async (req, res) => {
+  try {
+    const rideId = req.params.id;
+    const { driverName } = req.body;
+    if (!driverName) {
+      return res.status(400).json({ error: "Driver name is required" });
+    }
 
-module.exports = shouldUseNative() ? Object.assign : function (target, source) {
-	var from;
-	var to = toObject(target);
-	var symbols;
+    const result = await db.collection('rides').updateOne(
+      { _id: new ObjectId(rideId), status: "pending" },
+      { $set: { status: "accepted", acceptedBy: driverName } }
+    );
 
-	for (var s = 1; s < arguments.length; s++) {
-		from = Object(arguments[s]);
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({ error: "Ride not found or already accepted" });
+    }
 
-		for (var key in from) {
-			if (hasOwnProperty.call(from, key)) {
-				to[key] = from[key];
-			}
-		}
+    res.status(200).json({ message: "Ride accepted successfully" });
+  } catch (err) {
+    res.status(400).json({ error: "Failed to accept ride", details: err.message });
+  }
+});
 
-		if (getOwnPropertySymbols) {
-			symbols = getOwnPropertySymbols(from);
-			for (var i = 0; i < symbols.length; i++) {
-				if (propIsEnumerable.call(from, symbols[i])) {
-					to[symbols[i]] = from[symbols[i]];
-				}
-			}
-		}
-	}
+// Get all rides
+app.get('/rides', async (req, res) => {
+  const rides = await db.collection('rides').find().toArray();
+  res.status(200).json(rides);
+});
 
-	return to;
-};
+// ========== USERS ENDPOINTS ==========
+
+app.post('/users', async (req, res) => {
+  try {
+    const { name, contact, role, pickup, destination } = req.body;
+    if (!name || !contact || !role || !pickup || !destination) {
+      return res.status(400).json({ error: "Missing required user fields" });
+    }
+
+    const result = await db.collection('users').insertOne({
+      name, contact, role, pickup, destination
+    });
+
+    res.status(201).json({ id: result.insertedId });
+  } catch (err) {
+    res.status(400).json({ error: "Invalid user data", details: err.message });
+  }
+});
+
+app.get('/users', async (req, res) => {
+  const users = await db.collection('users').find().toArray();
+  res.status(200).json(users);
+});
+
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});
