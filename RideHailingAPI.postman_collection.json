@@ -1,0 +1,157 @@
+{
+  "info": {
+    "name": "RideHailingAPI",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "12345678-abcd-efgh-ijkl-1234567890ab"
+  },
+  "item": [
+    {
+      "name": "Create User",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:3000/users",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "users"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Ali\",\n  \"contact\": \"0123456789\",\n  \"role\": \"passenger\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Get All Users",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:3000/users",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "users"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Request Ride",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:3000/rides/request",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "rides",
+            "request"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"passengerId\": \"<PASTE_PASSENGER_ID>\",\n  \"pickup\": \"KLCC\",\n  \"destination\": \"KL Sentral\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Accept Ride",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:3000/rides/<RIDE_ID>/accept",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "rides",
+            "<RIDE_ID>",
+            "accept"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"driverId\": \"<PASTE_DRIVER_ID>\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Get All Rides",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:3000/rides",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "rides"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Block User (Admin)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:3000/admin/users/<USER_ID>/block",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "admin",
+            "users",
+            "<USER_ID>",
+            "block"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"adminId\": \"<PASTE_ADMIN_ID>\"\n}"
+        }
+      }
+    }
+  ]
+}
