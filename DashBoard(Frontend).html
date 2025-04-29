@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ride-Hailing Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f8f9fa; color: #333; }
+    h1 { text-align: center; color: #1a73e8; }
+    .card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 0 5px #ccc; }
+    form { display: flex; flex-direction: column; gap: 10px; max-width: 400px; }
+    input, select, button { padding: 10px; border-radius: 4px; border: 1px solid #ccc; }
+    button { background-color: #1a73e8; color: white; cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { padding: 10px; border: 1px solid #eee; text-align: left; }
+    .accept-btn, .complete-btn, .block-btn { padding: 5px 10px; margin: 0 4px; color: white; border: none; cursor: pointer; }
+    .accept-btn { background: green; }
+    .complete-btn { background: orange; }
+    .block-btn { background: red; }
+  </style>
+</head>
+<body>
+
+  <h1>🚖 Ride-Hailing Dashboard</h1>
+
+  <!-- Create User -->
+  <div class="card">
+    <h2>👤 Create User</h2>
+    <form id="userForm">
+      <input type="text" id="userName" placeholder="Name" required>
+      <input type="text" id="userContact" placeholder="Contact" required>
+      <select id="userRole">
+        <option value="passenger">Passenger</option>
+        <option value="driver">Driver</option>
+        <option value="admin">Admin</option>
+      </select>
+      <button type="submit">Create User</button>
+      <div id="userStatus"></div>
+    </form>
+  </div>
+
+  <!-- Request Ride -->
+  <div class="card">
+    <h2>🧍 Passenger: Request a Ride</h2>
+    <form id="rideForm">
+      <select id="passengerSelect" required></select>
+      <input type="text" id="pickup" placeholder="Pickup Location" required>
+      <input type="text" id="destination" placeholder="Destination" required>
+      <button type="submit">Request Ride</button>
+      <div id="rideStatus"></div>
+    </form>
+  </div>
+
+  <!-- Driver Panel -->
+  <div class="card">
+    <h2>🚗 Driver Panel</h2>
+    <select id="driverSelect"><option disabled selected>Select Driver</option></select>
+    <table id="pendingRides">
+      <thead>
+        <tr><th>Passenger</th><th>Pickup</th><th>Destination</th><th>Action</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- All Rides -->
+  <div class="card">
+    <h2>📋 All Rides</h2>
+    <table id="allRides">
+      <thead>
+        <tr><th>Passenger</th><th>Pickup</th><th>Destination</th><th>Status</th><th>Driver</th><th>Action</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- Admin Analytics -->
+  <div class="card">
+    <h2>🧑‍💼 Admin: Driver Analytics & Block</h2>
+    <table id="driverAnalytics">
+      <thead>
+        <tr><th>Driver Name</th><th>Contact</th><th>Total Completed Rides</th><th>Status</th><th>Action</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    let userMap = {};
+
+    async function loadUsers() {
+      const res = await fetch('http://localhost:3000/users');
+      const users = await res.json();
+
+      const passengerSelect = document.getElementById('passengerSelect');
+      const driverSelect = document.getElementById('driverSelect');
+      passengerSelect.innerHTML = '<option disabled selected>Select Passenger</option>';
+      driverSelect.innerHTML = '<option disabled selected>Select Driver</option>';
+      userMap = {};
+
+      users.forEach(user => {
+        userMap[user._id] = user.name;
+        const option = document.createElement('option');
+        option.value = user._id;
+        option.textContent = `${user.name} (${user.role})`;
+
+        if (user.role === 'passenger') {
+          passengerSelect.appendChild(option);
+        } else if (user.role === 'driver' && !user.isBlocked) {
+          driverSelect.appendChild(option);
+        }
+      });
+    }
+
+    async function loadRides() {
+      const res = await fetch('http://localhost:3000/rides');
+      const rides = await res.json();
+
+      const pendingTable = document.querySelector('#pendingRides tbody');
+      const allTable = document.querySelector('#allRides tbody');
+
+      pendingTable.innerHTML = '';
+      allTable.innerHTML = '';
+
+      rides.forEach(ride => {
+        const passengerName = ride.passengerName || ride.passengerId;
+        const driverName = ride.driverName || ride.acceptedBy || '-';
+
+        allTable.innerHTML += `
+          <tr>
+            <td>${passengerName}</td>
+            <td>${ride.pickup}</td>
+            <td>${ride.destination}</td>
+            <td>${ride.status}</td>
+            <td>${driverName}</td>
+            <td>${ride.status === 'accepted' ? `<button class="complete-btn" onclick="completeRide('${ride._id}')">Complete</button>` : ''}</td>
+          </tr>
+        `;
+
+        if (ride.status === 'pending') {
+          pendingTable.innerHTML += `
+            <tr>
+              <td>${passengerName}</td>
+              <td>${ride.pickup}</td>
+              <td>${ride.destination}</td>
+              <td><button class="accept-btn" onclick="acceptRide('${ride._id}')">Accept</button></td>
+            </tr>
+          `;
+        }
+      });
+    }
+
+    async function acceptRide(rideId) {
+      const driverId = document.getElementById('driverSelect').value;
+      const driverName = document.getElementById('driverSelect').selectedOptions[0]?.textContent;
+
+      if (!driverId) return alert("Please select a driver first.");
+      const confirmAccept = confirm(`${driverName} wants to accept this ride?`);
+      if (!confirmAccept) return;
+
+      const res = await fetch(`http://localhost:3000/rides/${rideId}/accept`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ driverId })
+      });
+
+      if (res.ok) {
+        alert("✅ Ride accepted!");
+        loadRides();
+      } else {
+        const error = await res.json();
+        alert("❌ Error: " + error.error);
+      }
+    }
+
+    async function completeRide(rideId) {
+      const res = await fetch(`http://localhost:3000/rides/${rideId}/complete`, {
+        method: 'PATCH'
+      });
+
+      if (res.ok) {
+        alert("✅ Ride marked as completed.");
+        loadRides();
+      } else {
+        alert("❌ Failed to complete ride.");
+      }
+    }
+
+    async function loadAnalytics() {
+      const res = await fetch('http://localhost:3000/admin/analytics');
+      const analytics = await res.json();
+      const table = document.querySelector('#driverAnalytics tbody');
+      table.innerHTML = '';
+
+      analytics.forEach(driver => {
+        table.innerHTML += `
+          <tr>
+            <td>${driver.driverName}</td>
+            <td>${driver.driverContact}</td>
+            <td>${driver.totalCompletedRides}</td>
+            <td>${driver.isBlocked ? 'Blocked' : 'Active'}</td>
+            <td>${!driver.isBlocked ? `<button class="block-btn" onclick="blockUser('${driver._id}')">Block</button>` : ''}</td>
+          </tr>
+        `;
+      });
+    }
+
+    async function blockUser(userId) {
+      const confirmBlock = confirm("Are you sure you want to block this user?");
+      if (!confirmBlock) return;
+
+      const res = await fetch(`http://localhost:3000/admin/users/${userId}/block`, {
+        method: 'PATCH'
+      });
+
+      if (res.ok) {
+        alert("✅ User has been blocked.");
+        loadUsers();
+        loadAnalytics();
+        loadRides();
+      } else {
+        alert("❌ Failed to block user.");
+      }
+    }
+
+    // Event Listeners
+    document.getElementById('rideForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const passengerId = document.getElementById('passengerSelect').value;
+      const pickup = document.getElementById('pickup').value;
+      const destination = document.getElementById('destination').value;
+
+      await fetch('http://localhost:3000/rides/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ passengerId, pickup, destination })
+      });
+
+      document.getElementById('rideForm').reset();
+      document.getElementById('rideStatus').textContent = '✅ Ride requested!';
+      loadRides();
+    });
+
+    document.getElementById('userForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const name = document.getElementById('userName').value;
+      const contact = document.getElementById('userContact').value;
+      const role = document.getElementById('userRole').value;
+
+      await fetch('http://localhost:3000/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, contact, role })
+      });
+
+      document.getElementById('userForm').reset();
+      document.getElementById('userStatus').textContent = '✅ User created!';
+      loadUsers();
+      loadAnalytics();
+    });
+
+    // Initial load
+    loadUsers();
+    loadRides();
+    loadAnalytics();
+  </script>
+</body>
+</html>
